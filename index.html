@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Question Answer PDF Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+
+body{
+  font-family: Arial, sans-serif;
+  background:#f4f6f9;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  min-height:100vh;
+  padding:16px;
+}
+
+/* MAIN BOX */
+.container{
+  width:100%;
+  max-width:900px;
+  background:white;
+  border:1px solid #ddd;
+  border-radius:14px;
+  padding:20px;
+  box-shadow:0 6px 20px rgba(0,0,0,0.08);
+}
+
+/* TITLE */
+h1{
+  text-align:center;
+  margin-bottom:20px;
+}
+
+/* CARDS */
+.card{
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:14px;
+  margin-bottom:14px;
+  background:#fafafa;
+}
+
+label{
+  font-size:13px;
+  margin-bottom:4px;
+  display:block;
+}
+
+input,textarea{
+  width:100%;
+  border:1px solid #ccc;
+  border-radius:8px;
+  padding:10px;
+  font-size:14px;
+}
+
+textarea{min-height:70px}
+
+/* BUTTONS */
+.btn{
+  border:1px solid #ccc;
+  border-radius:8px;
+  padding:8px 14px;
+  font-size:14px;
+  cursor:pointer;
+  background:white;
+}
+
+.btn:hover{background:#eee}
+
+.btn-primary{
+  background:#000;
+  color:white;
+  border:none;
+}
+
+.btn-danger{
+  color:red;
+  border-color:red;
+}
+
+/* GRID */
+.row{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+}
+
+@media(max-width:600px){
+  .row{grid-template-columns:1fr}
+}
+
+/* OTHER */
+.actions{
+  display:flex;
+  gap:8px;
+  margin-top:12px;
+  flex-wrap:wrap;
+}
+
+.qa-item{
+  border:1px solid #ddd;
+  border-radius:8px;
+  padding:10px;
+  margin-bottom:8px;
+  background:white;
+}
+
+.qa-footer{
+  display:flex;
+  justify-content:flex-end;
+  margin-top:6px;
+}
+
+.empty{
+  text-align:center;
+  color:#888;
+  padding:20px;
+}
+
+#toast{
+  position:fixed;
+  bottom:20px;
+  left:50%;
+  transform:translateX(-50%);
+  background:black;
+  color:white;
+  padding:10px 20px;
+  border-radius:6px;
+  display:none;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>Question Answer PDF Generator</h1>
+
+<div class="card">
+  <label>PDF Title</label>
+  <input id="pdfTitle" type="text" value="My Q&A Sheet">
+
+  <div class="row" style="margin-top:10px;">
+    <div>
+      <label>Question</label>
+      <textarea id="qInput"></textarea>
+    </div>
+    <div>
+      <label>Answer</label>
+      <textarea id="aInput"></textarea>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-primary" onclick="addQA()">+ Add Q&A</button>
+    <button class="btn" onclick="clearInputs()">Clear</button>
+  </div>
+</div>
+
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <span id="countLabel">0 Q&As added</span>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-danger" onclick="clearAll()">Clear all</button>
+      <button class="btn btn-primary" onclick="generatePDF()">Download PDF</button>
+    </div>
+  </div>
+
+  <div id="qalist">
+    <div class="empty">No Q&As yet. Add your first one above!</div>
+  </div>
+</div>
+
+</div>
+
+<div id="toast">PDF downloaded!</div>
+
+<script>
+let items = [];
+
+function addQA(){
+  const q = document.getElementById('qInput').value.trim();
+  const a = document.getElementById('aInput').value.trim();
+  if(!q||!a){alert('Please fill in both question and answer.');return;}
+  items.push({q,a,id:Date.now()});
+  clearInputs();
+  render();
+}
+
+function clearInputs(){
+  document.getElementById('qInput').value='';
+  document.getElementById('aInput').value='';
+}
+
+function deleteQA(id){
+  items=items.filter(x=>x.id!==id);
+  render();
+}
+
+function render(){
+  const el=document.getElementById('qalist');
+  const lbl=document.getElementById('countLabel');
+  lbl.textContent=items.length+' Q&A'+(items.length!==1?'s':'')+' added';
+  if(!items.length){el.innerHTML='<div class="empty">No Q&As yet. Add your first one above!</div>';return;}
+  el.innerHTML=items.map((it,i)=>`
+    <div class="qa-item">
+      <div>Q${i+1}: ${it.q}</div>
+      <div>A: ${it.a}</div>
+      <div class="qa-footer">
+        <button class="btn btn-danger" onclick="deleteQA(${it.id})">Delete</button>
+      </div>
+    </div>`).join('');
+}
+
+function clearAll(){
+  if(!items.length)return;
+  if(confirm('Clear all Q&As?')){items=[];render();}
+}
+
+function generatePDF(){
+  if(!items.length){alert('Add at least one Q&A first!');return;}
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:'mm',format:'a4'});
+  const pw=210,pl=18,pr=18,usable=pw-pl-pr;
+  let y=20;
+
+  const title=document.getElementById('pdfTitle').value.trim()||'Q&A Sheet';
+
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(24); /* ONLY CHANGE */
+  doc.setTextColor(30,30,30);
+  doc.text(title,pl,y);
+  y+=4;
+
+  doc.setDrawColor(180,180,180);
+  doc.setLineWidth(0.4);
+  doc.line(pl,y,pw-pr,y);
+  y+=8;
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica','normal');
+  doc.setTextColor(120,120,120);
+  doc.text('Generated on '+new Date().toLocaleDateString('en-IN',{year:'numeric',month:'long',day:'numeric'}),pl,y);
+  doc.text('Total: '+items.length+' Q&A'+(items.length!==1?'s':''),pw-pr,y,{align:'right'});
+  y+=10;
+
+  items.forEach((it,i)=>{
+    const qLines=doc.splitTextToSize('Q: '+it.q, usable);
+    const aLines=doc.splitTextToSize('A: '+it.a, usable);
+    const blockH=6+(qLines.length*5)+(aLines.length*5)+10;
+
+    if(y+blockH>275){doc.addPage();y=20;}
+
+    doc.setFillColor(245,247,252);
+    doc.setDrawColor(210,215,230);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(pl-3,y-4,usable+6,blockH,2,2,'FD');
+
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(9);
+    doc.setTextColor(130,130,160);
+    doc.text('No. '+(i+1),pl,y);
+    y+=5;
+
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(11);
+    doc.setTextColor(30,40,80);
+    doc.text(qLines,pl,y);
+    y+=qLines.length*5+3;
+
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(11);
+    doc.setTextColor(50,90,60);
+    doc.text(aLines,pl,y);
+    y+=aLines.length*5+8;
+  });
+
+  const pg=doc.getNumberOfPages();
+  for(let p=1;p<=pg;p++){
+    doc.setPage(p);
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(9);
+    doc.setTextColor(160,160,160);
+    doc.text('Page '+p+' of '+pg,pw/2,290,{align:'center'});
+  }
+
+  doc.save(title.replace(/\s+/g,'_')+'.pdf');
+  const t=document.getElementById('toast');
+  t.style.display='block';
+  setTimeout(()=>t.style.display='none',2500);
+}
+</script>
+
+</body>
+</html>
